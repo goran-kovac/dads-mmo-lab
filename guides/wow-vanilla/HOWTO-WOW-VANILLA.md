@@ -47,6 +47,35 @@ The script walks you through everything interactively. You enter your client pat
 
 ---
 
+## Windows (Docker Desktop)
+
+There is a Windows version of the same installer: `install-wow-vanilla.ps1`. It builds the identical server (same Dockerfile, same database import, same bot/AHBot settings), but uses Docker Desktop instead of SteamOS packages. It does not need WSL distros or `Install-DML.ps1`.
+
+**Requirements:** Windows 10/11 64-bit, Docker Desktop (the installer offers to install it via `winget`), 20 GB free on the drive Docker stores its data on (usually `C:`), 8 GB+ RAM for Docker, and your 1.12.1 client on a **local** drive (network shares can't be mounted into Docker).
+
+Open PowerShell in the folder you downloaded the script to and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-wow-vanilla.ps1
+```
+
+Differences from the Steam Deck version:
+
+| | Steam Deck (`.sh`) | Windows (`.ps1`) |
+|---|---|---|
+| Server folder | `~/wow-vanilla-server` | `%USERPROFILE%\wow-vanilla-server` |
+| Extracted maps/vmaps/mmaps | `data/` folder | Docker volume `wow-vanilla-data` (much faster than a Windows folder) |
+| Compile threads | fixed `-j2` | sized from Docker Desktop's CPUs/RAM |
+| Launcher | Gaming Mode via Konsole | Desktop shortcut **Vanilla WoW Server** (starts Docker Desktop + server, launches `WoW.exe`, stops the server when WoW closes) |
+| Realmlist lock | `chmod 444` | Windows read-only attribute |
+| Logs | `/tmp/wow-vanilla-*.log` | `%TEMP%\wow-vanilla-*.log`, session log in `%USERPROFILE%` |
+
+Account creation (Step 2) works the same: run `docker attach vanilla-mangosd` in PowerShell — the installer can open that window for you at the end. Steps 3 and 4 below are handled automatically on Windows (realmlist + desktop shortcut).
+
+If Docker Desktop has too little memory (the installer warns below 6 GB), create `%USERPROFILE%\.wslconfig` with `[wsl2]` / `memory=8GB`, run `wsl --shutdown`, and restart Docker Desktop.
+
+---
+
 ## What Happens During Install
 
 ### Phase 1: System Check + Client Validation (~2 min)
