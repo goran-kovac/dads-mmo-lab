@@ -15,6 +15,7 @@ All servers run in **Docker** via [AzerothCore's official Docker compose setup](
 | **Steam Deck and Machine** | [WoW-WotLK-HOWTO.md](./WoW-WotLK-HOWTO.md) — full install walkthrough with automated installer |
 | **Linux (Debian, Fedora, Bazzite, Ubuntu, PopOS!, Arch Linux, Mint)** | [WoW-WotLK-HOWTO.md](./WoW-WotLK-HOWTO.md) — server setup, account creation, daily use commands |
 | **Windows 10/11** | [DML-Windows-HOWTO.md](../DML-Windows/DML-Windows-HOWTO.md) — full Windows installer walkthrough |
+| **Windows 10/11 with Docker Desktop** | [WoW-Playerbots-DockerDesktop-HOWTO.md](./WoW-Playerbots-DockerDesktop-HOWTO.md) — standalone installer, no DML substrate needed |
 | **Want multiplayer (LAN or internet)?** | [WoW-Wotlk-NETWORKING.md](./WoW-Wotlk-NETWORKING.md) — firewall, port forwarding, connecting friends |
 
 ---
@@ -44,6 +45,8 @@ Go through the full install guide, but skip the Steam Deck-specific sections. Th
 Go through the full install guide, but skip the Steam Deck-specific sections. The server management, account creation, and networking sections all apply directly. Use `install-wow-wotlk-ubuntu.sh` to install AzerothCore WotLK + Playerbots on Ubuntu/Debian/PopOS!/Linux Mint systems.
 
 **Windows users:** See [DML-Windows-HOWTO.md](../DML-Windows/DML-Windows-HOWTO.md) for the Windows installer walkthrough.
+
+**Windows users with Docker Desktop:** See [WoW-Playerbots-DockerDesktop-HOWTO.md](./WoW-Playerbots-DockerDesktop-HOWTO.md). `Install-WoW-WotLK-DockerDesktop.ps1` builds the same server with Docker Desktop instead of the DML substrate (`Install-DML.ps1` is not required).
 
 ---
 
