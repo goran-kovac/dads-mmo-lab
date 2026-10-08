@@ -16,7 +16,7 @@
     The installer copies itself into the install folder and writes
     Start-Server.cmd / Stop-Server.cmd / GM-Console.cmd shortcuts.
 
-    Version: 1.0.0
+    Version: 1.0.1
 
     What the install does:
       1. Verifies wslc, Git, disk space, ports
@@ -27,6 +27,9 @@
       6. Creates the playerbot config and guides you through account creation
 
     Changelog:
+      1.0.1 - Fix: acore_playerbots init failed with 'Could not copy the playerbots SQL
+              files'. The base SQL is now imported by a short-lived mysql client
+              container with a bind mount instead of 'wslc container cp'.
       1.0.0 - Initial WSL containers release
         - Mirrors the startup flow of Install-WoW-WotLK.ps1 / the Docker Desktop variant
         - Replaces docker compose with explicit wslc network/volume/run calls
@@ -67,7 +70,7 @@ $ErrorActionPreference = 'Stop'
 # =============================================================================
 # Config
 # =============================================================================
-$WizardVersion       = '1.0.0'
+$WizardVersion       = '1.0.1'
 $MinWslVersion       = [version]'2.9.3'
 $CoreRepo            = 'https://github.com/mod-playerbots/azerothcore-wotlk.git'
 $CoreBranch          = 'Playerbot'
@@ -721,15 +724,29 @@ function Initialize-PlayerbotsDb {
     Write-Info "Initializing acore_playerbots ($tables/$expected base tables present)..."
     $null = Invoke-Mysql 'DROP DATABASE IF EXISTS acore_playerbots; CREATE DATABASE acore_playerbots DEFAULT CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci;'
 
-    # Copy the files into the container and import them there -- piping SQL
-    # from PowerShell 5.1 into a native command would re-encode it.
-    $null = Invoke-Wslc @('container', 'exec', 'ac-database', 'rm', '-rf', '/tmp/pb-base') -Quiet
-    if ((Invoke-Wslc @('container', 'cp', $baseDir, 'ac-database:/tmp/pb-base') -Quiet) -ne 0) {
-        Write-Fail 'Could not copy the playerbots SQL files into the database container.'
+    # Import through a short-lived mysql client container that bind-mounts the
+    # SQL folder -- the same mechanism the db-import container uses. Piping SQL
+    # from PowerShell 5.1 would re-encode it, and 'wslc container cp' needs an
+    # existing target directory (Docker archive semantics).
+    # MYSQL_PWD keeps the password out of the command line; no double quotes in
+    # $importCmd because PS 5.1 does not escape them for native commands.
+    $importCmd = 'for f in /pb-base/*.sql; do echo importing $(basename $f); mysql -h ac-database -uroot acore_playerbots < $f || { echo failed: $f; exit 1; }; done'
+    Remove-ContainerIfExists 'ac-playerbots-init'
+    $runArgs = @('container', 'run', '--detach', '--name', 'ac-playerbots-init', '--network', $NetworkName,
+        '--env', "MYSQL_PWD=$DbRootPassword",
+        '--volume', "${baseDir}:/pb-base:ro",
+        'mysql:8.4', 'bash', '-c', $importCmd)
+    $ok = ((Invoke-Wslc $runArgs -Quiet) -eq 0) -and (Wait-ContainerExit 'ac-playerbots-init' 30 'Importing playerbots tables')
+    if (-not $ok) {
+        Write-Warn 'Output of the playerbots import:'
+        $null = Invoke-Wslc @('container', 'logs', '--tail', '30', 'ac-playerbots-init')
+        Write-Fail "acore_playerbots initialization failed.`nRe-run the installer -- the compile and the world import are skipped."
     }
-    $importCmd = 'for f in /tmp/pb-base/*.sql; do mysql -uroot -p$MYSQL_ROOT_PASSWORD acore_playerbots < $f || { echo failed: $f; exit 1; }; done; rm -rf /tmp/pb-base'
-    if ((Invoke-Wslc @('container', 'exec', 'ac-database', 'bash', '-c', $importCmd)) -ne 0) {
-        Write-Fail 'acore_playerbots initialization failed.'
+    Remove-ContainerIfExists 'ac-playerbots-init'
+
+    $tablesStr = Invoke-Mysql "SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA='acore_playerbots';"
+    if ($tablesStr -match '^\d+$' -and [int]$tablesStr -lt $expected) {
+        Write-Warn "acore_playerbots has $tablesStr tables, the base SQL defines $expected. If the worldserver keeps restarting, check: wslc container logs ac-worldserver"
     }
     Write-Ok 'acore_playerbots initialized.'
 }
