@@ -16,6 +16,7 @@ All servers run in **Docker** via [AzerothCore's official Docker compose setup](
 | **Linux (Debian, Fedora, Bazzite, Ubuntu, PopOS!, Arch Linux, Mint)** | [WoW-WotLK-HOWTO.md](./WoW-WotLK-HOWTO.md) — server setup, account creation, daily use commands |
 | **Windows 10/11** | [DML-Windows-HOWTO.md](../DML-Windows/DML-Windows-HOWTO.md) — full Windows installer walkthrough |
 | **Windows 10/11 with Docker Desktop** | [WoW-Playerbots-DockerDesktop-HOWTO.md](./WoW-Playerbots-DockerDesktop-HOWTO.md) — standalone installer, no DML substrate needed |
+| **Windows 10/11 with WSL containers (`wslc`)** | [WoW-Playerbots-WSLContainers-HOWTO.md](./WoW-Playerbots-WSLContainers-HOWTO.md) — uses the container engine built into WSL 2.9.3+, nothing else to install |
 | **Want multiplayer (LAN or internet)?** | [WoW-Wotlk-NETWORKING.md](./WoW-Wotlk-NETWORKING.md) — firewall, port forwarding, connecting friends |
 
 ---
@@ -47,6 +48,8 @@ Go through the full install guide, but skip the Steam Deck-specific sections. Th
 **Windows users:** See [DML-Windows-HOWTO.md](../DML-Windows/DML-Windows-HOWTO.md) for the Windows installer walkthrough.
 
 **Windows users with Docker Desktop:** See [WoW-Playerbots-DockerDesktop-HOWTO.md](./WoW-Playerbots-DockerDesktop-HOWTO.md). `Install-WoW-WotLK-DockerDesktop.ps1` builds the same server with Docker Desktop instead of the DML substrate (`Install-DML.ps1` is not required).
+
+**Windows users with WSL containers:** See [WoW-Playerbots-WSLContainers-HOWTO.md](./WoW-Playerbots-WSLContainers-HOWTO.md). `Install-WoW-WotLK-WSLContainers.ps1` builds the same server with WSL's built-in `wslc` container engine — no Docker Desktop, no DML substrate, no Linux distro.
 
 ---
 
