@@ -8,7 +8,7 @@
     needs the DML substrate (dml-arch + its own Docker Engine) instead.
     Install-DML.ps1 is NOT required for this script.
 
-    Version: 1.0.0
+    Version: 1.0.1
 
     What this does:
       1. Verifies Docker Desktop (Linux containers), Git, disk space, ports
@@ -20,6 +20,9 @@
       7. Writes Start/Stop/Console shortcuts into the install folder
 
     Changelog:
+      1.0.1 - Fix: ready detection searched only the last 50 log lines, which the
+              playerbots stats output fills within seconds; the whole log since
+              the current container start is searched now.
       1.0.0 - Initial Docker Desktop release
         - Mirrors the build/startup flow of Install-WoW-WotLK.ps1 v1.3.1
         - Runs docker / git natively from PowerShell (no WSL distro needed)
@@ -53,7 +56,7 @@ $ErrorActionPreference = 'Stop'
 # =============================================================================
 # Config
 # =============================================================================
-$WizardVersion       = '1.0.0'
+$WizardVersion       = '1.0.1'
 $CoreRepo            = 'https://github.com/mod-playerbots/azerothcore-wotlk.git'
 $CoreBranch          = 'Playerbot'
 $ModuleRepo          = 'https://github.com/mod-playerbots/mod-playerbots.git'
@@ -680,10 +683,17 @@ function Wait-ForServer {
     $t0 = Get-Date
     $lastReport = -1
     while (((Get-Date) - $t0).TotalMinutes -lt 60) {
+        # Search the whole log since the current start: the playerbots stats
+        # blocks push 'ready...' out of any short --tail window within seconds,
+        # and an older 'ready...' from before a restart must not count.
+        $startedAt = Invoke-Capture 'docker' @('inspect', 'ac-worldserver', '--format', '{{.State.StartedAt}}')
+        $logArgs = @('logs')
+        if ($startedAt -and $startedAt -notmatch '^0001-') { $logArgs += @('--since', $startedAt) }
+        $logArgs += 'ac-worldserver'
         $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        $logs = (& docker logs --tail 50 ac-worldserver 2>&1 | ForEach-Object { "$_" }) -join "`n"
+        $isReady = [bool](& docker @logArgs 2>&1 | ForEach-Object { "$_" } | Select-String -Pattern 'ready\.\.\.' -Quiet)
         $ErrorActionPreference = $prevEap
-        if ($logs -match 'ready\.\.\.') {
+        if ($isReady) {
             Write-Host ''
             Write-Ok 'Server is READY!'
             return $true

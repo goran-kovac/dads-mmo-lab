@@ -16,7 +16,7 @@
     The installer copies itself into the install folder and writes
     Start-Server.cmd / Stop-Server.cmd / GM-Console.cmd shortcuts.
 
-    Version: 1.0.1
+    Version: 1.0.2
 
     What the install does:
       1. Verifies wslc, Git, disk space, ports
@@ -27,6 +27,9 @@
       6. Creates the playerbot config and guides you through account creation
 
     Changelog:
+      1.0.2 - Fix: the installer kept waiting although the server was up. The
+              playerbots stats output pushed 'ready...' out of the last 50 log
+              lines; the whole log since the current container start is searched now.
       1.0.1 - Fix: acore_playerbots init failed with 'Could not copy the playerbots SQL
               files'. The base SQL is now imported by a short-lived mysql client
               container with a bind mount instead of 'wslc container cp'.
@@ -70,7 +73,7 @@ $ErrorActionPreference = 'Stop'
 # =============================================================================
 # Config
 # =============================================================================
-$WizardVersion       = '1.0.1'
+$WizardVersion       = '1.0.2'
 $MinWslVersion       = [version]'2.9.3'
 $CoreRepo            = 'https://github.com/mod-playerbots/azerothcore-wotlk.git'
 $CoreBranch          = 'Playerbot'
@@ -236,10 +239,11 @@ function Get-FreeGB([string]$path) {
 # =============================================================================
 
 # Returns Status ('running', 'exited', ... or '' if the container does not
-# exist), Health ('healthy', 'starting', ... or '') and ExitCode.
+# exist), Health ('healthy', 'starting', ... or ''), ExitCode and StartedAt
+# (RFC3339 text, as accepted by 'wslc container logs --since').
 # 'wslc container inspect' prints a JSON array (Docker-compatible schema).
 function Get-ContainerState([string]$name) {
-    $empty = [pscustomobject]@{ Status = ''; Health = ''; ExitCode = '' }
+    $empty = [pscustomobject]@{ Status = ''; Health = ''; ExitCode = ''; StartedAt = '' }
     $json = Invoke-Capture 'wslc' @('container', 'inspect', $name)
     if ($Script:LastCaptureExit -ne 0 -or -not $json) { return $empty }
     try {
@@ -255,7 +259,8 @@ function Get-ContainerState([string]$name) {
     $state = $info.State
     $health = ''
     if ($state.PSObject.Properties['Health'] -and $state.Health) { $health = [string]$state.Health.Status }
-    return [pscustomobject]@{ Status = [string]$state.Status; Health = $health; ExitCode = [string]$state.ExitCode }
+    $started = if ($state.PSObject.Properties['StartedAt']) { [string]$state.StartedAt } else { '' }
+    return [pscustomobject]@{ Status = [string]$state.Status; Health = $health; ExitCode = [string]$state.ExitCode; StartedAt = $started }
 }
 
 function Test-ContainerExists([string]$name) { return [bool](Get-ContainerState $name).Status }
@@ -828,15 +833,21 @@ function Wait-ForServer {
     $t0 = Get-Date
     $lastReport = -1
     while (((Get-Date) - $t0).TotalMinutes -lt 60) {
+        # Search the whole log since the current start: the playerbots stats
+        # blocks push 'ready...' out of any short --tail window within seconds,
+        # and an older 'ready...' from before a restart must not count.
+        $st = Get-ContainerState 'ac-worldserver'
+        $logArgs = @('container', 'logs')
+        if ($st.StartedAt -and $st.StartedAt -notmatch '^0001-') { $logArgs += @('--since', $st.StartedAt) }
+        $logArgs += 'ac-worldserver'
         $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        $logs = (& wslc container logs --tail 50 ac-worldserver 2>&1 | ForEach-Object { "$_" }) -join "`n"
+        $isReady = [bool](& wslc @logArgs 2>&1 | ForEach-Object { "$_" } | Select-String -Pattern 'ready\.\.\.' -Quiet)
         $ErrorActionPreference = $prevEap
-        if ($logs -match 'ready\.\.\.') {
+        if ($isReady) {
             Write-Host ''
             Write-Ok 'Server is READY!'
             return $true
         }
-        $st = Get-ContainerState 'ac-worldserver'
         if ($st.Status -ne 'running') {
             # wslc has no restart policy -- a crashed worldserver stays down
             Write-Warn "World server stopped (status: $($st.Status), exit $($st.ExitCode))."
